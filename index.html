@@ -1,137 +1,269 @@
 <!DOCTYPE html>
-<html>
+<html lang="vi">
 <head>
     <meta charset="UTF-8" />
-    <title>HỆ THỐNG GIÁM SÁT XE Ô TÔ (CAN Bus Monitoring)</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Vehicle Monitor</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent-speed: #ef4444;
+            --accent-rpm: #f59e0b;
+            --accent-fuel: #10b981;
+            --accent-temp: #3b82f6;
+            --accent-gps: #8b5cf6;
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            text-align: center;
-            background-color: #eef1f5;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at 10% 20%, rgb(30, 41, 59) 0%, rgb(15, 23, 42) 90%);
+            color: var(--text-primary);
             margin: 0;
-            padding: 0 10px 40px;
+            padding: 20px;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            align-items: center;
         }
-        h1 {
-            margin: 30px auto 20px;
-            font-size: 2.2rem;
-            color: #2c3e50;
-        }
-        #dashboard {
-            max-width: 1100px;
-            margin: 0 auto;
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
             width: 100%;
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 20px;
         }
-        .data-card {
-            background-color: white;
-            padding: 25px 20px;
-            border-radius: 15px;
-            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
-            width: 250px;
-            min-height: 120px;
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .status-dot {
+            height: 10px;
+            width: 10px;
+            background-color: #ef4444; /* Default Red */
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            box-shadow: 0 0 10px #ef4444;
+            transition: all 0.3s ease;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 25px;
             display: flex;
             flex-direction: column;
-            justify-content: space-around;
-            transition: transform 0.3s ease;
-            text-align: left;
+            justify-content: space-between;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
-        .data-card:hover {
+
+        .card:hover {
             transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            border-color: rgba(255, 255, 255, 0.2);
         }
-        .data-card h2 {
-            margin: 0 0 5px;
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .icon-box {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-size: 1.2rem;
+            color: white;
+        }
+
+        .card-title {
             font-size: 1.1rem;
-            color: #34495e;
-            opacity: 0.8;
+            color: var(--text-secondary);
             font-weight: 500;
         }
-        .data-value {
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: #2980b9;
-            margin-top: 5px;
+
+        .data-display {
+            font-size: 3rem;
+            font-weight: 700;
+            line-height: 1;
         }
+
         .unit {
             font-size: 1.2rem;
-            font-weight: normal;
+            color: var(--text-secondary);
+            font-weight: 400;
             margin-left: 5px;
-            color: #7f8c8d;
         }
-        /* Color coding for specific cards */
-        #speed-card .data-value { color: #e74c3c; } /* Tốc độ: Đỏ */
-        #rpm-card .data-value { color: #f39c12; } /* Vòng tua: Cam */
-        #fuel-card .data-value { color: #27ae60; } /* Nhiên liệu: Xanh lá */
-        #temp-card .data-value { color: #9b59b6; } /* Nhiệt độ: Tím */
 
-        #status-bar {
-            margin: 20px auto;
-            font-size: 1rem;
-            color: #555;
+        /* Specific Colors */
+        .speed-icon { background: linear-gradient(135deg, #ef4444, #b91c1c); box-shadow: 0 5px 15px rgba(239, 68, 68, 0.3); }
+        .rpm-icon { background: linear-gradient(135deg, #f59e0b, #d97706); box-shadow: 0 5px 15px rgba(245, 158, 11, 0.3); }
+        .fuel-icon { background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 5px 15px rgba(16, 185, 129, 0.3); }
+        .temp-icon { background: linear-gradient(135deg, #3b82f6, #2563eb); box-shadow: 0 5px 15px rgba(59, 130, 246, 0.3); }
+        .gps-icon { background: linear-gradient(135deg, #8b5cf6, #7c3aed); box-shadow: 0 5px 15px rgba(139, 92, 246, 0.3); }
+
+        /* GPS Button */
+        .gps-btn {
+            margin-top: 15px;
+            padding: 12px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            text-align: center;
+            transition: opacity 0.3s;
+            display: block;
         }
+        .gps-btn:hover { opacity: 0.9; }
+        .gps-btn.disabled { 
+            background: #475569; 
+            pointer-events: none; 
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
         footer {
             margin-top: auto;
-            font-size: 0.9rem;
-            color: #7f8c8d;
-            padding: 15px 0;
-            border-top: 1px solid #ddd;
+            padding-top: 40px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
         }
-        /* Mobile adjustment */
-        @media (max-width: 600px) {
-            .data-card {
-                width: 90%;
-            }
-            h1 {
-                font-size: 1.8rem;
-            }
+        
+        .progress-bar-bg {
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            margin-top: 15px;
+            overflow: hidden;
         }
+        .progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+
     </style>
 </head>
 <body>
 
-    <h1>HỆ THỐNG GIÁM SÁT XE Ô TÔ</h1>
-    
-    <div id="status-bar">
-        Trạng thái kết nối: <span id="connectionStatus" style="font-weight: bold; color: #e74c3c;">Đang kết nối...</span>
-    </div>
+    <header>
+        <h1><i class="fa-solid fa-car-side"></i> Vehicle Monitor</h1>
+        <div class="status-badge">
+            <span id="conn-dot" class="status-dot"></span>
+            <span id="conn-text">Đang kết nối...</span>
+        </div>
+    </header>
 
-    <div id="dashboard">
-        <div class="data-card" id="speed-card">
-            <h2>Tốc độ xe</h2>
-            <div class="data-value"><span id="speedValue">0</span><span class="unit"> km/h</span></div>
+    <div class="dashboard-grid">
+        <div class="card">
+            <div class="card-header">
+                <div class="icon-box speed-icon"><i class="fa-solid fa-gauge-high"></i></div>
+                <div class="card-title">Tốc độ xe</div>
+            </div>
+            <div>
+                <span id="speedValue" class="data-display">0</span><span class="unit">km/h</span>
+            </div>
+            <div class="progress-bar-bg"><div id="speed-bar" class="progress-bar-fill" style="background: #ef4444;"></div></div>
         </div>
 
-        <div class="data-card" id="rpm-card">
-            <h2>Tốc độ động cơ</h2>
-            <div class="data-value"><span id="rpmValue">0</span><span class="unit"> vòng/phút</span></div>
+        <div class="card">
+            <div class="card-header">
+                <div class="icon-box rpm-icon"><i class="fa-solid fa-gear"></i></div>
+                <div class="card-title">Vòng tua máy</div>
+            </div>
+            <div>
+                <span id="rpmValue" class="data-display">0</span><span class="unit">rpm</span>
+            </div>
+            <div class="progress-bar-bg"><div id="rpm-bar" class="progress-bar-fill" style="background: #f59e0b;"></div></div>
         </div>
 
-        <div class="data-card" id="fuel-card">
-            <h2>Nhiên liệu</h2>
-            <div class="data-value"><span id="fuelValue">0</span><span class="unit"> %</span></div>
+        <div class="card">
+            <div class="card-header">
+                <div class="icon-box fuel-icon"><i class="fa-solid fa-gas-pump"></i></div>
+                <div class="card-title">Nhiên liệu</div>
+            </div>
+            <div>
+                <span id="fuelValue" class="data-display">--</span><span class="unit">%</span>
+            </div>
+            <div class="progress-bar-bg"><div id="fuel-bar" class="progress-bar-fill" style="background: #10b981;"></div></div>
         </div>
 
-        <div class="data-card" id="temp-card">
-            <h2>Nhiệt độ nước làm mát</h2>
-            <div class="data-value"><span id="tempValue">0</span><span class="unit"> °C</span></div>
+        <div class="card">
+            <div class="card-header">
+                <div class="icon-box temp-icon"><i class="fa-solid fa-temperature-half"></i></div>
+                <div class="card-title">Nhiệt độ nước</div>
+            </div>
+            <div>
+                <span id="tempValue" class="data-display">0</span><span class="unit">°C</span>
+            </div>
+             <div class="progress-bar-bg"><div id="temp-bar" class="progress-bar-fill" style="background: #3b82f6;"></div></div>
+        </div>
+
+        <div class="card" style="grid-column: span 1; min-width: 280px;">
+            <div class="card-header">
+                <div class="icon-box gps-icon"><i class="fa-solid fa-location-dot"></i></div>
+                <div class="card-title">Định vị GPS</div>
+            </div>
+            <div style="font-size: 0.9rem; color: #cbd5e1; margin-bottom: 10px;">
+                Lat: <span id="latValue">--</span> <br>
+                Lon: <span id="lonValue">--</span>
+            </div>
+            <a id="mapsLink" href="#" target="_blank" class="gps-btn disabled">
+                <i class="fa-solid fa-map-location-dot"></i> Xem trên Google Maps
+            </a>
         </div>
     </div>
 
     <footer>
-        Dự án Giám sát CAN Bus. Vui lòng đảm bảo thiết bị ESP32 đang gửi dữ liệu.
+        Student Research Project 2026 - Powered by Firebase & ESP32
     </footer>
 
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
 
     <script>
-        // 🚨 BƯỚC QUAN TRỌNG: THAY THẾ CONFIG SAU VỚI THÔNG TIN DỰ ÁN FIREBASE CỦA BẠN 🚨
+        // --- CẤU HÌNH FIREBASE (Dùng lại thông tin của bạn) ---
         const firebaseConfig = {
             apiKey: "AIzaSyB8cNQCrCTmVUYTaO-BA8B927jR383WCqk",
             authDomain: "nghien-cuu-khoa-hoc-bc273.firebaseapp.com",
@@ -142,59 +274,90 @@
             appId: "1:421701420881:web:f5efb9c05aa4d0a154f570",
             measurementId: "G-JGH6EX9BV1"
         };
-        
-        // Khởi tạo Firebase
+
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-        const dataPath = "CAR_DATA"; // Tên node cha mà ESP32 của bạn gửi dữ liệu tới
+        const dataPath = "CAR_DATA";
 
-        const metrics = [
-            { id: "speed", unit: "km/h", dbKey: "Speed" },
-            { id: "rpm", unit: "vòng/phút", dbKey: "RPM" },
-            { id: "fuel", unit: "%", dbKey: "Fuel" },
-            { id: "temp", unit: "°C", dbKey: "CoolantTemp" }
-        ];
+        // DOM Elements
+        const statusDot = document.getElementById('conn-dot');
+        const statusText = document.getElementById('conn-text');
+        const mapsLink = document.getElementById('mapsLink');
 
-        function startMonitoring() {
-            const statusElement = document.getElementById("connectionStatus");
-            const dataRef = db.ref(dataPath);
+        const metrics = {
+            speed: { el: 'speedValue', bar: 'speed-bar', max: 200 },
+            rpm: { el: 'rpmValue', bar: 'rpm-bar', max: 8000 },
+            fuel: { el: 'fuelValue', bar: 'fuel-bar', max: 100 },
+            temp: { el: 'tempValue', bar: 'temp-bar', max: 130 }
+        };
 
-            // Bắt đầu lắng nghe dữ liệu từ Firebase
-            dataRef.on("value", (snapshot) => {
-                const data = snapshot.val();
-                
-                // Cập nhật trạng thái kết nối
-                statusElement.innerText = "Đã kết nối";
-                statusElement.style.color = "#27ae60";
-
-                if (data) {
-                    metrics.forEach(metric => {
-                        const valueElement = document.getElementById(`${metric.id}Value`);
-                        // Lấy giá trị từ Firebase, làm tròn số thập phân (nếu cần)
-                        let value = data[metric.dbKey] !== undefined ? data[metric.dbKey] : 0;
-                        
-                        // Định dạng giá trị (ví dụ: làm tròn RPM và Tốc độ)
-                        if (metric.id === "speed" || metric.id === "rpm") {
-                            value = Math.round(value);
-                        }
-
-                        valueElement.innerText = value.toLocaleString('vi-VN'); // Dùng định dạng Việt Nam cho số
-                    });
-                } else {
-                     // Trường hợp không có dữ liệu
-                     metrics.forEach(metric => {
-                        document.getElementById(`${metric.id}Value`).innerText = "---";
-                    });
-                }
-            }, (error) => {
-                console.error("Firebase Read Failed:", error);
-                statusElement.innerText = "LỖI KẾT NỐI";
-                statusElement.style.color = "#d32f2f";
-            });
+        // Hàm cập nhật trạng thái kết nối
+        function setStatus(connected) {
+            if (connected) {
+                statusDot.style.backgroundColor = '#10b981'; // Green
+                statusDot.style.boxShadow = '0 0 10px #10b981';
+                statusText.innerText = "Hệ thống Online";
+                statusText.style.color = '#10b981';
+            } else {
+                statusDot.style.backgroundColor = '#ef4444'; // Red
+                statusDot.style.boxShadow = '0 0 10px #ef4444';
+                statusText.innerText = "Mất kết nối";
+                statusText.style.color = '#ef4444';
+            }
         }
 
-        // Tự động khởi động giám sát khi trang được tải
-        startMonitoring();
+        const dataRef = db.ref(dataPath);
+        
+        // Timeout check: Nếu không nhận data sau 10 giây -> báo offline
+        let lastUpdate = Date.now();
+        setInterval(() => {
+            if (Date.now() - lastUpdate > 10000) setStatus(false);
+        }, 5000);
+
+        dataRef.on("value", (snapshot) => {
+            const data = snapshot.val();
+            lastUpdate = Date.now();
+            setStatus(true);
+
+            if (data) {
+                // 1. Cập nhật các chỉ số cơ bản & thanh Progress Bar
+                updateMetric('speed', data.Speed);
+                updateMetric('rpm', data.RPM);
+                updateMetric('fuel', data.Fuel);
+                updateMetric('temp', data.CoolantTemp);
+
+                // 2. Cập nhật GPS
+                const lat = data.Lat;
+                const lon = data.Lon;
+
+                if (lat && lon && lat !== 0) {
+                    document.getElementById('latValue').innerText = parseFloat(lat).toFixed(5);
+                    document.getElementById('lonValue').innerText = parseFloat(lon).toFixed(5);
+                    
+                    // Cập nhật link Google Maps
+                    mapsLink.href = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+                    mapsLink.classList.remove('disabled');
+                    mapsLink.innerHTML = '<i class="fa-solid fa-map-location-dot"></i> Mở Bản Đồ Vị Trí Xe';
+                } else {
+                    document.getElementById('latValue').innerText = "Đang tìm tín hiệu...";
+                    document.getElementById('lonValue').innerText = "---";
+                    mapsLink.classList.add('disabled');
+                    mapsLink.innerHTML = '<i class="fa-solid fa-satellite-dish"></i> Đang chờ tín hiệu GPS...';
+                }
+            }
+        });
+
+        function updateMetric(key, val) {
+            if (val === undefined || val === null) return;
+            // Cập nhật số
+            const roundedVal = Math.round(val);
+            document.getElementById(metrics[key].el).innerText = roundedVal;
+            
+            // Cập nhật thanh Bar
+            const percentage = Math.min((roundedVal / metrics[key].max) * 100, 100);
+            document.getElementById(metrics[key].bar).style.width = percentage + '%';
+        }
+
     </script>
 </body>
 </html>

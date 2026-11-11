@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Đo đạc thông số</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --border: #334155; --text: #e2e8f0; --muted: #94a3b8;
+    --accent: #6366f1; --ok: #10b981; --warn: #f59e0b; --bad: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, Segoe UI, sans-serif; font-size: 15px; }
+  header { padding: 18px 16px 8px; text-align: center; }
+  header h1 { margin: 0; color: var(--accent); font-size: 22px; letter-spacing: .5px; }
+  header p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 8px 16px 40px; }
+  .tabs { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+  .tabs button { flex: 1; min-width: 200px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .card h2 { margin: 0 0 10px; font-size: 16px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); flex: 1; min-width: 140px; }
+  input, select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; font-size: 15px; }
+  button { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 14px; font-size: 15px; cursor: pointer; }
+  button.sec { background: var(--border); }
+  button.bad { background: var(--bad); }
+  button.ok { background: var(--ok); }
+  button:disabled { opacity: .45; cursor: default; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .stat { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
+  .stat .k { color: var(--muted); font-size: 12px; }
+  .stat .v { font-size: 22px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .stat .v small { font-size: 12px; color: var(--muted); font-weight: 400; }
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
+  th, td { padding: 8px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  th { color: var(--muted); font-weight: 600; }
+  tr.avg td { font-weight: 700; color: var(--ok); }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 12px; background: var(--bg); border: 1px solid var(--border); }
+  .pill.on { color: var(--ok); border-color: var(--ok); }
+  .pill.off { color: var(--bad); border-color: var(--bad); }
+  .hint { color: var(--muted); font-size: 13px; line-height: 1.5; }
+  .hidden { display: none; }
+  #log { max-height: 180px; overflow-y: auto; font-family: Consolas, monospace; font-size: 12px; color: var(--muted); background: var(--bg); border-radius: 8px; padding: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ĐO ĐẠC THÔNG SỐ HỆ THỐNG</h1>
+  <p>
+    Firebase: <span id="conn" class="pill off">Đang kết nối...</span>
+    &nbsp; Lệch đồng hồ máy so với Firebase: <span id="offset" class="pill">?</span>
+  </p>
+</header>
+
+<main>
+  <div class="tabs">
+    <button id="tabNet" onclick="showTab('net')">1 &amp; 2. Độ trễ + Tỷ lệ mất gói</button>
+    <button id="tabGps" class="sec" onclick="showTab('gps')">3. Sai số GPS</button>
+  </div>
+
+  <!-- ================= ĐỘ TRỄ + MẤT GÓI ================= -->
+  <section id="secNet">
+    <div class="card">
+      <h2>Phiên đo</h2>
+      <div class="row">
+        <label>Lần đo
+          <select id="netRun"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+        </label>
+        <label style="flex:3">Điều kiện đo (ghi chú)
+          <input id="netNote" placeholder="VD: WiFi điện thoại, sóng mạnh, xe đứng yên">
+        </label>
+        <label>Thời gian đo (giây)
+          <input id="netDur" type="number" value="300" min="10">
+        </label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button id="netStart" class="ok" onclick="netStartSession()">Bắt đầu</button>
+        <button id="netStop" class="bad" onclick="netStopSession()" disabled>Dừng &amp; lưu kết quả</button>
+        <span id="netTimer" class="pill">Chưa đo</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Kết quả phiên hiện tại</h2>
+      <div class="stats">
+        <div class="stat"><div class="k">Độ trễ trung bình</div><div class="v" id="sLatAvg">–<small> ms</small></div></div>
+        <div class="stat"><div class="k">Độ trễ min / max</div><div class="v" id="sLatMinMax">–</div></div>
+        <div class="stat"><div class="k">Gói web nhận</div><div class="v" id="sRecv">0</div></div>
+        <div class="stat"><div class="k">Gói ESP32 đã gửi</div><div class="v" id="sExpected">0</div></div>
+        <div class="stat"><div class="k">Gói bị mất</div><div class="v" id="sLost">0</div></div>
+        <div class="stat"><div class="k">Tỷ lệ thành công</div><div class="v" id="sRate">–</div></div>
+        <div class="stat"><div class="k">ESP32: gửi Firebase lỗi</div><div class="v" id="sFbFail">–</div></div>
+        <div class="stat"><div class="k">ESP32: gói Nano lỗi</div><div class="v" id="sNanoErr">–</div></div>
+      </div>
+      <p class="hint">
+        Độ trễ = (giờ web nhận gói, đã hiệu chỉnh theo đồng hồ Firebase) − (giờ ESP32 nhận xong gói từ Nano, giờ chuẩn NTP).<br>
+        Gói bị mất được tính từ số thứ tự <b>Seq</b> bị thiếu. Nếu ESP32 khởi động lại giữa phiên, Seq bắt đầu lại và trang tự tính tiếp.
+      </p>
+      <div id="log"></div>
+    </div>
+
+    <div class="card">
+      <h2>Tổng hợp 5 lần đo</h2>
+      <div class="tablewrap">
+        <table>
+          <thead><tr>
+            <th>Lần</th><th>Điều kiện</th><th>Thời gian (s)</th><th>Gói gửi</th><th>Gói nhận</th><th>Mất</th>
+            <th>Thành công (%)</th><th>Trễ TB (ms)</th><th>Trễ min</th><th>Trễ max</th>
+          </tr></thead>
+          <tbody id="netTable"></tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="sec" onclick="exportNet()">Xuất CSV (Excel)</button>
+        <button class="sec" onclick="exportRaw()">Xuất CSV từng gói của phiên cuối</button>
+        <button class="bad" onclick="clearNet()">Xóa bảng</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= GPS ================= -->
+  <section id="secGps" class="hidden">
+    <div class="card">
+      <h2>Điểm đo</h2>
+      <div class="row">
+        <label>Lần đo / điểm
+          <select id="gpsRun"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+        </label>
+        <label style="flex:2">Tên điểm
+          <input id="gpsName" placeholder="VD: Cổng trường">
+        </label>
+        <label style="flex:3">Tọa độ chuẩn (dán từ Google Maps)
+          <input id="gpsRef" placeholder="10.850500, 106.771800">
+        </label>
+        <label>Thời gian ghi (giây)
+          <input id="gpsDur" type="number" value="120" min="10">
+        </label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button id="gpsStart" class="ok" onclick="gpsStartSession()">Bắt đầu ghi</button>
+        <button id="gpsStop" class="bad" onclick="gpsStopSession()" disabled>Dừng &amp; lưu kết quả</button>
+        <span id="gpsTimer" class="pill">Chưa đo</span>
+      </div>
+      <p class="hint">Cách lấy tọa độ chuẩn: mở Google Maps chế độ vệ tinh, phóng to tối đa, nhấn giữ đúng điểm đặt thiết bị → bấm vào dãy số tọa độ để sao chép.</p>
+    </div>
+
+    <div class="card">
+      <h2>Kết quả điểm hiện tại</h2>
+      <div class="stats">
+        <div class="stat"><div class="k">Số mẫu GPS</div><div class="v" id="gN">0</div></div>
+        <div class="stat"><div class="k">Lat trung bình</div><div class="v" id="gLat" style="font-size:17px">–</div></div>
+        <div class="stat"><div class="k">Lon trung bình</div><div class="v" id="gLon" style="font-size:17px">–</div></div>
+        <div class="stat"><div class="k">Sai số vị trí TB so với chuẩn</div><div class="v" id="gErr">–<small> m</small></div></div>
+        <div class="stat"><div class="k">Sai số lớn nhất</div><div class="v" id="gMax">–<small> m</small></div></div>
+      </div>
+      <p class="hint">Sai số = khoảng cách Haversine từ tọa độ trung bình đo được tới tọa độ chuẩn. Các mẫu (0, 0) do chưa bắt được GPS sẽ bị bỏ qua.</p>
+    </div>
+
+    <div class="card">
+      <h2>Tổng hợp 5 lần đo</h2>
+      <div class="tablewrap">
+        <table>
+          <thead><tr>
+            <th>Lần</th><th>Điểm</th><th>Lat chuẩn</th><th>Lon chuẩn</th><th>Lat đo TB</th><th>Lon đo TB</th>
+            <th>Số mẫu</th><th>Sai số TB (m)</th><th>Sai số max (m)</th>
+          </tr></thead>
+          <tbody id="gpsTable"></tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="sec" onclick="exportGps()">Xuất CSV (Excel)</button>
+        <button class="bad" onclick="clearGps()">Xóa bảng</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+// ====================== KẾT NỐI FIREBASE ======================
+firebase.initializeApp({ databaseURL: "https://nghien-cuu-khoa-hoc-bc273-default-rtdb.firebaseio.com" });
+const db = firebase.database();
+let serverOffset = 0;                    // ms: giờ Firebase - giờ máy tính
+let lastCar = null;                      // gói CAR_DATA mới nhất
+let lastStats = null;                    // /TEST_STATS mới nhất
+let firstSnapshot = true;
+
+db.ref(".info/connected").on("value", s => {
+  const el = document.getElementById("conn");
+  el.textContent = s.val() ? "Đã kết nối" : "Mất kết nối";
+  el.className = "pill " + (s.val() ? "on" : "off");
+});
+db.ref(".info/serverTimeOffset").on("value", s => {
+  serverOffset = s.val() || 0;
+  document.getElementById("offset").textContent = serverOffset + " ms";
+});
+db.ref("TEST_STATS").on("value", s => { lastStats = s.val(); });
+
+db.ref("CAR_DATA").on("value", s => {
+  const d = s.val();
+  const tWeb = Date.now() + serverOffset;          // giờ nhận đã hiệu chỉnh
+  if (firstSnapshot) { firstSnapshot = false; lastCar = d; return; }   // bỏ gói cũ lúc mới mở trang
+  if (!d) return;
+  if (lastCar && d.Seq === lastCar.Seq) { lastCar = d; return; }       // không phải gói mới
+  lastCar = d;
+  onPacket(d, tWeb);
+});
+
+function onPacket(d, tWeb) {
+  if (net.running) netAdd(d, tWeb);
+  if (gps.running) gpsAdd(d);
+}
+
+// ====================== TIỆN ÍCH ======================
+const $ = id => document.getElementById(id);
+function store(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
+function load(key) { try { return JSON.parse(localStorage.getItem(key)) || []; } catch (e) { return []; } }
+function fmt(x, n = 0) { return (x === null || x === undefined || isNaN(x)) ? "–" : Number(x).toFixed(n); }
+function avg(a) { return a.length ? a.reduce((s, x) => s + x, 0) / a.length : NaN; }
+function csvDownload(name, rows) {
+  const text = "﻿" + rows.map(r => r.map(c => {
+    const s = String(c ?? "");
+    return /[",\n;]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }).join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+  a.download = name;
+  a.click();
+}
+function logLine(t) {
+  const el = $("log");
+  el.textContent = t + "\n" + el.textContent.slice(0, 4000);
+}
+function showTab(t) {
+  $("secNet").classList.toggle("hidden", t !== "net");
+  $("secGps").classList.toggle("hidden", t !== "gps");
+  $("tabNet").className = t === "net" ? "" : "sec";
+  $("tabGps").className = t === "gps" ? "" : "sec";
+}
+
+// ====================== 1 & 2. ĐỘ TRỄ + MẤT GÓI ======================
+const net = { running: false, rows: [], segs: [], startStats: null, t0: 0, timer: null };
+let netResults = load("netResults");
+let lastRaw = [];
+
+function netStartSession() {
+  net.running = true;
+  net.rows = [];
+  net.segs = [];                 // mỗi đoạn Seq liên tục: {first, last, seen:Set}
+  net.startStats = lastStats ? { ...lastStats } : null;
+  net.t0 = Date.now();
+  $("log").textContent = "";
+  $("netStart").disabled = true; $("netStop").disabled = false;
+  const dur = +$("netDur").value || 300;
+  net.timer = setInterval(() => {
+    const el = Math.floor((Date.now() - net.t0) / 1000);
+    $("netTimer").textContent = "Đang đo: " + el + " / " + dur + " s";
+    if (el >= dur) netStopSession();
+  }, 500);
+  netRender();
+}
+
+function netAdd(d, tWeb) {
+  const seq = d.Seq;
+  if (typeof seq !== "number") { logLine("Gói không có Seq – ESP32 chưa nạp code mới?"); return; }
+  let seg = net.segs[net.segs.length - 1];
+  if (!seg || seq < seg.last) {                     // ESP32 khởi động lại -> đoạn mới
+    if (seg) logLine("Seq bắt đầu lại (ESP32 khởi động lại?)");
+    seg = { first: seq, last: seq, seen: new Set() };
+    net.segs.push(seg);
+  }
+  seg.seen.add(seq);
+  seg.last = Math.max(seg.last, seq);
+
+  let lat = null;
+  if (d.T_s > 0) {
+    lat = tWeb - (d.T_s * 1000 + (d.T_ms || 0));
+  }
+  net.rows.push({ seq, tWeb, tEsp: d.T_s > 0 ? d.T_s * 1000 + (d.T_ms || 0) : null, lat });
+  logLine("Seq " + seq + "  trễ " + (lat === null ? "(ESP32 chưa có giờ NTP)" : lat + " ms"));
+  netRender();
+}
+
+function netCalc() {
+  const lats = net.rows.map(r => r.lat).filter(x => x !== null && Math.abs(x) < 60000);
+  let expected = 0, recv = 0;
+  net.segs.forEach(s => { expected += s.last - s.first + 1; recv += s.seen.size; });
+  const lost = expected - recv;
+  let fbFail = null, nanoErr = null;
+  if (net.startStats && lastStats) {
+    fbFail = (lastStats.FirebaseFail || 0) - (net.startStats.FirebaseFail || 0);
+    nanoErr = (lastStats.NanoErr || 0) - (net.startStats.NanoErr || 0);
+  }
+  return {
+    latAvg: avg(lats), latMin: lats.length ? Math.min(...lats) : NaN, latMax: lats.length ? Math.max(...lats) : NaN,
+    expected, recv, lost, rate: expected ? recv / expected * 100 : NaN, fbFail, nanoErr
+  };
+}
+
+function netRender() {
+  const c = netCalc();
+  $("sLatAvg").innerHTML = fmt(c.latAvg) + "<small> ms</small>";
+  $("sLatMinMax").textContent = fmt(c.latMin) + " / " + fmt(c.latMax);
+  $("sRecv").textContent = c.recv;
+  $("sExpected").textContent = c.expected;
+  $("sLost").textContent = c.lost;
+  $("sRate").textContent = isNaN(c.rate) ? "–" : c.rate.toFixed(2) + "%";
+  $("sFbFail").textContent = c.fbFail === null ? "–" : c.fbFail;
+  $("sNanoErr").textContent = c.nanoErr === null ? "–" : c.nanoErr;
+}
+
+function netStopSession() {
+  if (!net.running) return;
+  net.running = false;
+  clearInterval(net.timer);
+  $("netStart").disabled = false; $("netStop").disabled = true;
+  const c = netCalc();
+  const dur = Math.round((Date.now() - net.t0) / 1000);
+  $("netTimer").textContent = "Đã dừng (" + dur + " s)";
+  lastRaw = net.rows.slice();
+  const run = $("netRun").value;
+  netResults = netResults.filter(r => r.run !== run);
+  netResults.push({
+    run, note: $("netNote").value, dur, expected: c.expected, recv: c.recv, lost: c.lost,
+    rate: c.rate, latAvg: c.latAvg, latMin: c.latMin, latMax: c.latMax
+  });
+  netResults.sort((a, b) => a.run - b.run);
+  store("netResults", netResults);
+  netTable();
+  if (+run < 5) $("netRun").value = String(+run + 1);
+}
+
+function netTable() {
+  const body = $("netTable");
+  body.innerHTML = "";
+  netResults.forEach(r => {
+    body.insertAdjacentHTML("beforeend",
+      `<tr><td>${r.run}</td><td>${r.note || ""}</td><td>${r.dur}</td><td>${r.expected}</td><td>${r.recv}</td><td>${r.lost}</td>
+       <td>${fmt(r.rate, 2)}</td><td>${fmt(r.latAvg)}</td><td>${fmt(r.latMin)}</td><td>${fmt(r.latMax)}</td></tr>`);
+  });
+  if (netResults.length) {
+    const a = k => avg(netResults.map(r => r[k]).filter(x => x !== null && !isNaN(x)));
+    body.insertAdjacentHTML("beforeend",
+      `<tr class="avg"><td>TB</td><td>Trung bình ${netResults.length} lần</td><td>${fmt(a("dur"))}</td><td>${fmt(a("expected"), 1)}</td>
+       <td>${fmt(a("recv"), 1)}</td><td>${fmt(a("lost"), 1)}</td><td>${fmt(a("rate"), 2)}</td><td>${fmt(a("latAvg"))}</td>
+       <td>${fmt(a("latMin"))}</td><td>${fmt(a("latMax"))}</td></tr>`);
+  }
+}
+
+function exportNet() {
+  const rows = [["Lan", "Dieu kien", "Thoi gian (s)", "Goi gui", "Goi nhan", "Mat", "Thanh cong (%)", "Tre TB (ms)", "Tre min (ms)", "Tre max (ms)"]];
+  netResults.forEach(r => rows.push([r.run, r.note, r.dur, r.expected, r.recv, r.lost, fmt(r.rate, 2), fmt(r.latAvg), fmt(r.latMin), fmt(r.latMax)]));
+  csvDownload("do_tre_mat_goi.csv", rows);
+}
+function exportRaw() {
+  const rows = [["Seq", "Gio ESP32 (ms)", "Gio Web (ms)", "Do tre (ms)"]];
+  lastRaw.forEach(r => rows.push([r.seq, r.tEsp ?? "", r.tWeb, r.lat ?? ""]));
+  csvDownload("tung_goi_phien_cuoi.csv", rows);
+}
+function clearNet() {
+  if (!confirm("Xóa toàn bộ kết quả đo độ trễ / mất gói?")) return;
+  netResults = []; store("netResults", netResults); netTable();
+}
+
+// ====================== 3. SAI SỐ GPS ======================
+const gps = { running: false, pts: [], ref: null, t0: 0, timer: null };
+let gpsResults = load("gpsResults");
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000, r = Math.PI / 180;
+  const dLat = (lat2 - lat1) * r, dLon = (lon2 - lon1) * r;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+function parseRef(s) {
+  const m = (s || "").match(/(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)/);
+  return m ? { lat: +m[1], lon: +m[2] } : null;
+}
+
+function gpsStartSession() {
+  const ref = parseRef($("gpsRef").value);
+  if (!ref) { alert("Hãy dán tọa độ chuẩn dạng: 10.850500, 106.771800"); return; }
+  gps.ref = ref; gps.pts = []; gps.running = true; gps.t0 = Date.now();
+  $("gpsStart").disabled = true; $("gpsStop").disabled = false;
+  const dur = +$("gpsDur").value || 120;
+  gps.timer = setInterval(() => {
+    const el = Math.floor((Date.now() - gps.t0) / 1000);
+    $("gpsTimer").textContent = "Đang ghi: " + el + " / " + dur + " s";
+    if (el >= dur) gpsStopSession();
+  }, 500);
+  gpsRender();
+}
+
+function gpsAdd(d) {
+  const lat = +d.Lat, lon = +d.Lon;
+  if (!lat && !lon) return;                          // chưa bắt được GPS
+  gps.pts.push({ lat, lon, err: haversine(lat, lon, gps.ref.lat, gps.ref.lon) });
+  gpsRender();
+}
+
+function gpsCalc() {
+  if (!gps.pts.length) return null;
+  const mLat = avg(gps.pts.map(p => p.lat)), mLon = avg(gps.pts.map(p => p.lon));
+  return {
+    n: gps.pts.length, mLat, mLon,
+    err: haversine(mLat, mLon, gps.ref.lat, gps.ref.lon),
+    max: Math.max(...gps.pts.map(p => p.err))
+  };
+}
+
+function gpsRender() {
+  const c = gpsCalc();
+  $("gN").textContent = c ? c.n : 0;
+  $("gLat").textContent = c ? c.mLat.toFixed(6) : "–";
+  $("gLon").textContent = c ? c.mLon.toFixed(6) : "–";
+  $("gErr").innerHTML = (c ? c.err.toFixed(2) : "–") + "<small> m</small>";
+  $("gMax").innerHTML = (c ? c.max.toFixed(2) : "–") + "<small> m</small>";
+}
+
+function gpsStopSession() {
+  if (!gps.running) return;
+  gps.running = false;
+  clearInterval(gps.timer);
+  $("gpsStart").disabled = false; $("gpsStop").disabled = true;
+  $("gpsTimer").textContent = "Đã dừng";
+  const c = gpsCalc();
+  if (!c) { alert("Không có mẫu GPS hợp lệ (GPS chưa bắt được vệ tinh?)"); return; }
+  const run = $("gpsRun").value;
+  gpsResults = gpsResults.filter(r => r.run !== run);
+  gpsResults.push({ run, name: $("gpsName").value, refLat: gps.ref.lat, refLon: gps.ref.lon,
+                    mLat: c.mLat, mLon: c.mLon, n: c.n, err: c.err, max: c.max });
+  gpsResults.sort((a, b) => a.run - b.run);
+  store("gpsResults", gpsResults);
+  gpsTable();
+  if (+run < 5) $("gpsRun").value = String(+run + 1);
+}
+
+function gpsTable() {
+  const body = $("gpsTable");
+  body.innerHTML = "";
+  gpsResults.forEach(r => {
+    body.insertAdjacentHTML("beforeend",
+      `<tr><td>${r.run}</td><td>${r.name || ""}</td><td>${r.refLat.toFixed(6)}</td><td>${r.refLon.toFixed(6)}</td>
+       <td>${r.mLat.toFixed(6)}</td><td>${r.mLon.toFixed(6)}</td><td>${r.n}</td><td>${r.err.toFixed(2)}</td><td>${r.max.toFixed(2)}</td></tr>`);
+  });
+  if (gpsResults.length) {
+    const a = k => avg(gpsResults.map(r => r[k]));
+    body.insertAdjacentHTML("beforeend",
+      `<tr class="avg"><td>TB</td><td>Trung bình ${gpsResults.length} lần</td><td></td><td></td><td></td><td></td>
+       <td>${fmt(a("n"), 1)}</td><td>${fmt(a("err"), 2)}</td><td>${fmt(a("max"), 2)}</td></tr>`);
+  }
+}
+
+function exportGps() {
+  const rows = [["Lan", "Diem", "Lat chuan", "Lon chuan", "Lat do TB", "Lon do TB", "So mau", "Sai so TB (m)", "Sai so max (m)"]];
+  gpsResults.forEach(r => rows.push([r.run, r.name, r.refLat, r.refLon, r.mLat.toFixed(6), r.mLon.toFixed(6), r.n, r.err.toFixed(2), r.max.toFixed(2)]));
+  csvDownload("sai_so_gps.csv", rows);
+}
+function clearGps() {
+  if (!confirm("Xóa toàn bộ kết quả đo GPS?")) return;
+  gpsResults = []; store("gpsResults", gpsResults); gpsTable();
+}
+
+netTable();
+gpsTable();
+</script>
+</body>
+</html>
